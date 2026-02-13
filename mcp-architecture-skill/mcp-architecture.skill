@@ -1,0 +1,377 @@
+---
+name: mcp-architecture
+description: Guide for building MCPs with progressive disclosure, code execution support, and resource-based data access. Use when designing new MCPs or refactoring existing ones for better token efficiency.
+license: MIT
+---
+
+# MCP Architecture Skill
+
+## When to Use This Skill
+- Designing a new MCP server
+- Refactoring existing MCP for code execution
+- Implementing tool discovery endpoints
+- Creating resource-based data access
+- Defining TypeScript interfaces for tools
+
+## Core Principles
+
+### Progressive Disclosure
+Expose tools through discoverable structure, not upfront loading.
+
+**Anti-Pattern**:
+```python
+# All tools loaded into context (150KB)
+@mcp.tool("tool1")
+@mcp.tool("tool2")
+@mcp.tool("tool3")
+# ... 50 more tools
+```
+
+**Correct Pattern**:
+```python
+@mcp.tool("list_tools")
+async def list_tools(detail_level: str = "minimal"):
+    """Agents discover tools on-demand"""
+
+@mcp.tool("search_tools")
+async def search_tools(query: str):
+    """Agents search for relevant tools"""
+```
+
+### Resource-Based Data Access
+Return references, not full data.
+
+**Anti-Pattern**:
+```python
+return json.dumps({"content": large_25kb_content})
+```
+
+**Correct Pattern**:
+```python
+store_data(data_id, large_content)
+return json.dumps({
+    "data_id": data_id,
+    "resource_uri": f"mcp://{data_id}/content",
+    "preview": large_content[:500]
+})
+```
+
+### Tool Design for Code Composition
+Design tools to work in agent-written scripts.
+
+**Anti-Pattern**:
+```python
+# Requires multiple model calls
+@mcp.tool("scrape_and_save")
+# Monolithic, no flexibility
+```
+
+**Correct Pattern**:
+```python
+@mcp.tool("scrape_url")  # Composable
+@mcp.tool("save_content")  # Composable
+# Agent can: content = scrape_url(url); save_content(content)
+```
+
+## Implementation Checklist
+
+### Minimum Viable Progressive MCP
+- [ ] `list_tools` endpoint with detail levels
+- [ ] `search_tools` endpoint with query support
+- [ ] TypeScript definitions in `tools/` directory
+- [ ] At least one resource-based endpoint
+- [ ] Clear naming convention: `{mcp_name}_{tool_name}`
+
+### Full-Featured Progressive MCP
+- [ ] All minimum viable features
+- [ ] Category tagging for all tools
+- [ ] Resource URIs with TTL/expiration
+- [ ] Metadata-first responses
+- [ ] Error handling with helpful messages
+- [ ] Example scripts for code execution
+- [ ] Performance benchmarks (token usage)
+
+### Migration from Legacy MCP
+- [ ] Add discovery endpoints (non-breaking)
+- [ ] Create TypeScript definitions
+- [ ] Add resource access (parallel to existing)
+- [ ] Update responses to include references
+- [ ] Deprecation warnings on old patterns
+- [ ] Remove legacy patterns after adoption
+
+## Architecture Patterns
+
+### Pattern 1: Discovery Endpoint
+```python
+@mcp.tool(name="{mcp_name}_list_tools")
+async def list_tools(
+    detail_level: Literal["minimal", "brief", "full"] = "minimal",
+    category: Optional[str] = None
+) -> str:
+    """
+    List available tools with configurable detail.
+
+    Args:
+        detail_level:
+            - minimal: Names only (fastest, for exploration)
+            - brief: Names + descriptions (for searching)
+            - full: Complete schemas (for implementation)
+        category: Filter by category (e.g., "scraping", "analysis")
+
+    Returns:
+        JSON with tool information at requested detail level
+    """
+    pass
+```
+
+### Pattern 2: Search Endpoint
+```python
+@mcp.tool(name="{mcp_name}_search_tools")
+async def search_tools(
+    query: str,
+    category: Optional[str] = None,
+    max_results: int = 10
+) -> str:
+    """
+    Search for tools by keyword.
+
+    Args:
+        query: Search term (searches name, description, tags)
+        category: Optional category filter
+        max_results: Limit results (default 10)
+
+    Returns:
+        JSON array of matching tools with relevance scores
+    """
+    pass
+```
+
+### Pattern 3: Resource Access
+```python
+# Storage (use Redis/cache in production)
+RESOURCE_STORE = {}
+
+@mcp.tool(name="generate_data")
+async def generate_data(params: Params) -> str:
+    # Generate/fetch large data
+    data = expensive_operation(params)
+
+    # Store with expiration
+    resource_id = uuid.uuid4().hex
+    RESOURCE_STORE[resource_id] = {
+        "data": data,
+        "created_at": datetime.utcnow(),
+        "expires_at": datetime.utcnow() + timedelta(hours=1)
+    }
+
+    # Return reference
+    return json.dumps({
+        "resource_id": resource_id,
+        "resource_uri": f"{MCP_NAME}://{resource_id}/data",
+        "preview": str(data)[:500],
+        "size_bytes": len(str(data)),
+        "expires_in_seconds": 3600
+    })
+
+@mcp.resource("{MCP_NAME}://{resource_id}/data")
+async def get_data(resource_id: str) -> str:
+    """Retrieve full data by resource ID"""
+    if resource_id not in RESOURCE_STORE:
+        raise Exception(f"Resource {resource_id} not found or expired")
+    return RESOURCE_STORE[resource_id]["data"]
+```
+
+### Pattern 4: TypeScript Definitions
+Create `tools/{tool_name}.ts` for each tool:
+
+```typescript
+/**
+ * [Tool description]
+ *
+ * Best for:
+ * - Use case 1
+ * - Use case 2
+ *
+ * @example
+ * const result = await toolName({ param: "value" });
+ */
+
+export interface ToolNameInput {
+  /** Description of required parameter */
+  requiredParam: string;
+
+  /** Description of optional parameter */
+  optionalParam?: number;
+}
+
+export interface ToolNameOutput {
+  /** Unique identifier */
+  id: string;
+
+  /** Resource URI for full data access */
+  resource_uri: string;
+
+  /** Small preview for context */
+  preview: string;
+
+  /** Metadata without full data */
+  metadata: {
+    size_bytes: number;
+    created_at: string;
+    [key: string]: any;
+  };
+}
+```
+
+## Testing Requirements
+
+### Discovery Tests
+```python
+def test_list_tools_minimal():
+    result = await list_tools(detail_level="minimal")
+    assert isinstance(json.loads(result), list)
+
+def test_search_tools():
+    result = await search_tools(query="scrape")
+    tools = json.loads(result)
+    assert all("scrape" in t["name"].lower() for t in tools)
+```
+
+### Resource Tests
+```python
+async def test_resource_lifecycle():
+    # Generate resource
+    result = await generate_data(params)
+    data = json.loads(result)
+
+    # Access resource
+    content = await get_resource(data["resource_uri"])
+    assert content is not None
+
+    # Check expiration (mock time if needed)
+```
+
+### Code Execution Simulation
+```python
+async def test_code_execution_pattern():
+    # 1. Discover
+    tools = await list_tools(detail_level="minimal")
+
+    # 2. Search
+    matches = await search_tools(query="relevant")
+
+    # 3. Execute
+    result = await tool_name(params)
+
+    # 4. Access data
+    data = await get_resource(result["resource_uri"])
+
+    # Verify minimal context usage
+    assert total_tokens_used < 5000
+```
+
+## Common Pitfalls
+
+### ❌ Returning Large Data Directly
+```python
+# BAD
+return json.dumps({"content": large_content})
+```
+
+### ✅ Returning References
+```python
+# GOOD
+return json.dumps({
+    "resource_uri": f"mcp://{id}/content",
+    "preview": large_content[:500]
+})
+```
+
+### ❌ No Discovery Mechanism
+```python
+# BAD - Agent must know all tool names upfront
+```
+
+### ✅ Searchable Tools
+```python
+# GOOD
+@mcp.tool("list_tools")
+@mcp.tool("search_tools")
+```
+
+### ❌ Monolithic Tools
+```python
+# BAD - Can't compose
+@mcp.tool("fetch_process_and_save")
+```
+
+### ✅ Composable Tools
+```python
+# GOOD - Agent can mix and match
+@mcp.tool("fetch")
+@mcp.tool("process")
+@mcp.tool("save")
+```
+
+## Decision Trees
+
+### Should I create a new MCP or add to existing?
+
+**Create new MCP if**:
+- Different domain/category
+- Different dependencies
+- Independent lifecycle
+- Different update cadence
+
+**Add to existing MCP if**:
+- Same domain
+- Related functionality
+- Shared dependencies
+- Tools often used together
+
+### What detail level for list_tools?
+
+**Minimal** (names only):
+- Initial exploration
+- Counting/listing
+- Quick checks
+
+**Brief** (names + descriptions):
+- Search/filter operations
+- Discovery phase
+- Category browsing
+
+**Full** (complete schemas):
+- Implementation
+- Code generation
+- Type checking
+
+### When to use resources vs. direct returns?
+
+**Use resources when**:
+- Data > 1KB
+- Data reused multiple times
+- Want to keep data out of context
+- Binary/large files
+
+**Direct return when**:
+- Data < 1KB
+- Metadata/status
+- One-time use
+- Simple values
+
+## References
+
+See detailed guides in `references/`:
+- `progressive-disclosure.md` - Deep dive on architecture
+- `tool-discovery-patterns.md` - Discovery implementation
+- `resource-management.md` - Resource handling
+- `type-definitions.md` - TypeScript best practices
+- `best-practices.md` - Performance & security
+
+## Examples
+
+See working examples in `examples/`:
+- `simple-discovery-mcp/` - Minimal viable implementation
+- `full-featured-mcp/` - All patterns implemented
+- `migration-example/` - Refactoring legacy MCP

@@ -1,0 +1,319 @@
+---
+name: brian-dev-workflow
+description: Full-stack development workflow for Next.js 15 + React 19 + Supabase projects. Use when Brian requests help with web development, new features, debugging, testing, project setup, or architecture decisions. Enforces spec-driven development with spec-kit, strict TypeScript, comprehensive testing, feature branch workflow, and research-first approach using MCPs/skills before coding.
+license: MIT
+---
+
+# Brian's Development Workflow
+
+## Overview
+
+Brian builds Next.js + React + Supabase applications following a rigorous senior-level workflow. This skill guides project initialization, development process, testing standards, and deployment.
+
+**Core principle**: Research before coding. Validate before committing. Test everything.
+
+## Workflow Decision Tree
+
+### Starting New Project
+Use "Project Initialization" workflow
+
+### Adding Feature or Fixing Bug
+Use "Feature Development" workflow
+
+### Need Current Documentation
+Use "Research Phase" workflow (ALWAYS before coding)
+
+### Writing Tests
+See [`testing-guide.md`](references/testing-guide.md) for patterns
+
+### Code Quality Issues
+See [`standards.md`](references/standards.md) for rules
+
+## Project Initialization
+
+**ALWAYS** start with spec-kit for new projects:
+
+```bash
+git clone https://github.com/github/spec-kit.git project-name
+cd project-name
+rm -rf .git
+git init
+```
+
+### Required Files
+
+Create these immediately:
+- `spec.md` - Technical specification (from spec-kit template)
+- `plan.md` - Implementation phases and milestones
+- `tasks.md` - Task tracking (synced with GitHub Issues)
+
+### Specification Process
+
+1. **Generate initial spec** from spec-kit template
+2. **Ask clarifying questions** for ALL ambiguous items (CRITICAL: be thorough but concise)
+3. **Document decisions** with clear acceptance criteria
+4. **Create implementation plan** broken into phases
+5. **Initialize task tracking** with GitHub Issues integration
+
+Format for `tasks.md`:
+```markdown
+## In Progress
+- [ ] Task description (#issue-number)
+
+## Backlog
+- [ ] Task description (#issue-number)
+
+## Completed
+- [x] Task description (#issue-number)
+```
+
+## Feature Development Workflow
+
+### Phase 1: Research (MANDATORY before coding)
+
+**NEVER skip this phase. NEVER trust assumptions.**
+
+1. **Check for MCPs and Skills**
+   ```bash
+   # ALWAYS check available tools first
+   # List available MCPs and skills before proceeding
+   ```
+
+2. **Research Current Best Practices**
+   - Search web for latest official documentation
+   - Verify patterns for exact versions in use
+   - Check [`tech-versions.md`](references/tech-versions.md) for current stack
+   - Use available documentation skills/MCPs
+
+3. **Technology-Specific Research**
+   - Next.js 15: App Router, Server Components, Server Actions
+   - React 19: Actions, use() hook, optimistic updates
+   - Supabase: Latest client patterns, RLS policies
+   - See [`tech-versions.md`](references/tech-versions.md) for details
+
+### Phase 2: Implementation
+
+1. **Create Feature Branch**
+   ```bash
+   git checkout -b feature/descriptive-name
+   ```
+   **NEVER push directly to main/master**
+
+2. **Write Code Following Standards**
+   - TypeScript strict mode (no `any` types)
+   - Proper type safety and error handling
+   - See [`standards.md`](references/standards.md) for patterns
+
+3. **Write Tests FIRST or ALONGSIDE**
+   - Unit tests (Vitest) for all business logic
+   - Component tests (Testing Library) for UI
+   - E2E tests (Playwright) for critical paths
+   - See [`testing-guide.md`](references/testing-guide.md) for examples
+
+4. **Validate Continuously**
+   ```bash
+   pnpm type-check
+   pnpm lint
+   pnpm test
+   ```
+
+### Phase 3: Quality Assurance
+
+**Before committing, ALWAYS run:**
+
+```bash
+pnpm test:all  # Runs: type-check + lint + test + test:e2e
+```
+
+**Commit only when:**
+- ✅ All tests pass
+- ✅ No TypeScript errors
+- ✅ No ESLint warnings
+- ✅ Build succeeds locally
+
+### Phase 4: Git Workflow
+
+1. **Commit with Conventional Commits**
+   ```bash
+   git add .
+   git commit -m "feat: descriptive message"
+   ```
+   Types: `feat`, `fix`, `test`, `refactor`, `docs`, `chore`
+
+2. **Push to Feature Branch**
+   ```bash
+   git push origin feature/descriptive-name
+   ```
+
+3. **Update Task Tracking**
+   - Mark tasks complete in `tasks.md`
+   - Update related GitHub Issues
+   - Keep both in sync
+
+4. **Create Pull Request**
+   - Clear description referencing issues
+   - Request review from Brian (Human In Loop)
+   - **Wait for approval before merging**
+
+## Technology Stack
+
+Current versions (see [`tech-versions.md`](references/tech-versions.md) for details):
+
+**Core Framework**
+- Next.js 15.5.6 (App Router)
+- React 19.2.0
+- TypeScript 5.3.3 (strict mode)
+
+**Backend**
+- Supabase (PostgreSQL, Auth, Storage)
+- Payload CMS 3.61.1
+
+**State & Forms**
+- Zustand 4.5.0
+- React Hook Form 7.65.0
+- Zod 3.25.76
+
+**UI**
+- Tailwind CSS 3.4.1
+- Radix UI
+- Framer Motion 11.0.0
+
+**Testing**
+- Vitest (unit/integration)
+- Playwright (E2E)
+- Testing Library (components)
+
+**Deployment**
+- Vercel (hosting)
+- Supabase (database)
+
+## Critical Rules
+
+### NEVER
+- ❌ Push directly to main/master
+- ❌ Skip tests for new features
+- ❌ Use `any` type in TypeScript
+- ❌ Trust assumptions without verification
+- ❌ Commit code that fails CI
+- ❌ Skip research phase
+
+### ALWAYS
+- ✅ Create feature branch first
+- ✅ Check MCPs/skills before coding
+- ✅ Research latest documentation
+- ✅ Write tests alongside code
+- ✅ Use strict TypeScript
+- ✅ Validate locally before commit
+- ✅ Ask clarifying questions
+- ✅ Sync tasks.md with GitHub Issues
+- ✅ Wait for PR approval
+
+## Common Patterns
+
+### Component Structure
+```typescript
+// src/components/Feature/ComponentName.tsx
+import { FC } from 'react';
+
+interface ComponentNameProps {
+  prop: string;
+}
+
+export const ComponentName: FC<ComponentNameProps> = ({ prop }) => {
+  return <div>{prop}</div>;
+};
+```
+
+### API Routes (Next.js 15)
+```typescript
+// app/api/route/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  try {
+    // Logic
+    return NextResponse.json({ data });
+  } catch (error) {
+    return NextResponse.json({ error: 'Message' }, { status: 500 });
+  }
+}
+```
+
+### Supabase Queries
+```typescript
+import { createClient } from '@/lib/supabase/server';
+
+const supabase = createClient();
+const { data, error } = await supabase
+  .from('table')
+  .select('*')
+  .eq('id', id)
+  .single();
+```
+
+## Package Management
+
+**ALWAYS use pnpm:**
+```bash
+pnpm install <package>
+pnpm dev
+pnpm build
+pnpm test
+```
+
+## Build Commands
+
+```bash
+pnpm dev              # Development server
+pnpm build            # Production build
+pnpm start            # Production server
+pnpm type-check       # TypeScript validation
+pnpm lint             # ESLint
+pnpm lint:fix         # Auto-fix linting
+pnpm format           # Prettier
+pnpm test             # Unit tests
+pnpm test:watch       # Watch mode
+pnpm test:e2e         # E2E tests
+pnpm test:all         # Full validation suite
+```
+
+## Reference Files
+
+**Detailed documentation in references directory:**
+
+- [`tech-versions.md`](references/tech-versions.md) - Current versions, breaking changes, patterns
+- [`testing-guide.md`](references/testing-guide.md) - Test examples and best practices
+- [`standards.md`](references/standards.md) - TypeScript rules, code patterns, style guide
+
+## Senior Developer Mindset
+
+Approach every task as a **senior developer with decades of experience**:
+
+- **Methodical**: Follow the process, don't skip steps
+- **Thorough**: Research, validate, test everything
+- **Efficient**: Move fast without sacrificing quality
+- **Communicative**: Ask questions, explain decisions
+- **Pragmatic**: Balance perfection with deadlines
+
+**When time-crunched**: Maintain quality standards but scope intelligently. Better to deliver a fully-tested MVP than a buggy feature-complete product.
+
+## Environment Variables
+
+Required for all projects:
+```env
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+# Vercel (auto-injected)
+VERCEL_URL=
+```
+
+## Deployment
+
+Vercel handles deployment automatically:
+1. Push to main branch (after PR approval)
+2. Vercel builds and deploys
+3. Monitor deployment logs
+4. Verify production functionality

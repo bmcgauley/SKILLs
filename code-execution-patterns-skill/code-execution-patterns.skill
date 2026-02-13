@@ -1,0 +1,509 @@
+---
+name: code-execution-patterns
+description: Patterns for writing agent code that effectively uses MCPs with code execution. Covers data management, tool composition, error handling, and performance optimization. Use when writing code that calls MCP tools.
+license: MIT
+version: 1.0.0
+updated: 2025-11-09
+---
+
+# Code Execution Patterns Skill
+
+## When to Use This Skill
+- Writing agent code that calls MCP tools
+- Composing multiple MCP calls together
+- Managing large data between tool calls
+- Handling PII or sensitive data
+- Optimizing performance in agent scripts
+
+## Core Patterns
+
+### Pattern 1: Progressive Tool Discovery
+
+**Before coding, discover tools**:
+```python
+# 1. List available tools
+tools_list = await mcp.call("webscrape_list_tools", {
+    "detail_level": "minimal"
+})
+
+# 2. Search for relevant tools
+relevant_tools = await mcp.call("webscrape_search_tools", {
+    "query": "crawl",
+    "category": "scraping"
+})
+
+# 3. Load full schema only when needed
+schema = await mcp.call("webscrape_search_tools", {
+    "query": "crawl_site",
+    "detail_level": "full"
+})
+
+# 4. Now implement
+result = await mcp.call("webscrape_crawl_site", params)
+```
+
+### Pattern 2: Data Outside Context
+
+**Keep large data in execution environment**:
+```python
+# ❌ BAD - Loads data into context
+scraped_data = await mcp.call("scrape_url", {"url": url})
+# scraped_data is 25KB in context
+
+processed = process_large_data(scraped_data)  # In context!
+
+await mcp.call("save_data", {"data": processed})  # Back through context
+
+
+# ✅ GOOD - Data stays in execution environment
+scrape_result = await mcp.call("scrape_url", {"url": url})
+# Returns reference: {"resource_uri": "scrape://abc123/content"}
+
+# Fetch data into execution environment
+content = await mcp.get_resource(scrape_result["resource_uri"])
+# Now content is in execution env, NOT context
+
+# Process in execution environment
+processed = process_large_data(content)  # Outside context
+
+# Save directly
+await mcp.call("save_data", {"data": processed})
+```
+
+### Pattern 3: Tool Composition
+
+**Chain tools together in code**:
+```python
+# Multi-step workflow
+async def scrape_and_analyze(url: str):
+    # Step 1: Scrape
+    scrape_result = await mcp.call("webscrape_scrape_url", {
+        "url": url,
+        "response_format": "markdown"
+    })
+
+    # Step 2: Get content
+    content = await mcp.get_resource(scrape_result["resource_uri"])
+
+    # Step 3: Extract links (in execution env)
+    links = extract_links_from_markdown(content)
+
+    # Step 4: Filter links (in execution env)
+    external_links = [l for l in links if not is_same_domain(l, url)]
+
+    # Step 5: Process each link
+    results = []
+    for link in external_links[:10]:  # Limit to 10
+        link_result = await mcp.call("webscrape_scrape_url", {"url": link})
+        results.append(link_result)
+
+    return results
+```
+
+### Pattern 4: Parallel Execution
+
+**Run independent operations concurrently**:
+```python
+import asyncio
+
+async def scrape_multiple_urls(urls: List[str]):
+    # Create tasks for parallel execution
+    tasks = [
+        mcp.call("webscrape_scrape_url", {"url": url})
+        for url in urls
+    ]
+
+    # Execute in parallel
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Process results
+    successful = [r for r in results if not isinstance(r, Exception)]
+    failed = [r for r in results if isinstance(r, Exception)]
+
+    return {
+        "successful": len(successful),
+        "failed": len(failed),
+        "results": successful
+    }
+```
+
+### Pattern 5: PII Tokenization
+
+**Keep sensitive data out of context**:
+```python
+async def process_user_data(text_with_pii: str):
+    # Tokenize PII before any context interaction
+    tokenized = await mcp.call("helper_tokenize_pii", {
+        "text": text_with_pii,
+        "pii_types": ["email", "phone", "ssn"]
+    })
+
+    # Now safe to process in context
+    token_map_id = tokenized["token_map_id"]
+    safe_text = tokenized["tokenized_text"]
+
+    # Analyze tokenized text
+    analysis = analyze_text(safe_text)  # No PII in context
+
+    # Detokenize only final results if needed
+    if needs_original_data:
+        final = await mcp.call("helper_detokenize_pii", {
+            "text": analysis["result"],
+            "token_map_id": token_map_id
+        })
+    else:
+        final = analysis["result"]
+
+    return final
+```
+
+### Pattern 6: Chunking Large Data
+
+**Process large datasets in chunks**:
+```python
+async def process_large_dataset(data_uri: str):
+    # Get dataset metadata without loading full data
+    metadata = await mcp.call("get_data_metadata", {"uri": data_uri})
+
+    if metadata["size_bytes"] > 1_000_000:  # > 1MB
+        # Chunk the data
+        chunk_result = await mcp.call("helper_chunk_data", {
+            "data_uri": data_uri,
+            "chunk_size": 100_000,  # 100KB chunks
+            "overlap": 1000
+        })
+
+        # Process each chunk
+        results = []
+        for chunk_id in chunk_result["chunk_ids"]:
+            chunk_data = await mcp.get_resource(f"chunk://{chunk_id}")
+            processed = process_chunk(chunk_data)
+            results.append(processed)
+
+        # Combine results
+        return combine_results(results)
+    else:
+        # Small enough to process directly
+        data = await mcp.get_resource(data_uri)
+        return process_data(data)
+```
+
+### Pattern 7: Error Handling
+
+**Graceful failures with retries**:
+```python
+async def resilient_scrape(url: str, max_retries: int = 3):
+    for attempt in range(max_retries):
+        try:
+            result = await mcp.call("webscrape_scrape_url", {
+                "url": url,
+                "response_format": "markdown"
+            })
+
+            # Check for errors in result
+            if "error" in result:
+                raise Exception(result["error"])
+
+            return result
+
+        except Exception as e:
+            if attempt == max_retries - 1:
+                # Final attempt failed
+                return {
+                    "error": str(e),
+                    "url": url,
+                    "attempts": max_retries
+                }
+
+            # Wait before retry (exponential backoff)
+            await asyncio.sleep(2 ** attempt)
+
+    return None
+```
+
+### Pattern 8: Caching & Memoization
+
+**Avoid redundant tool calls**:
+```python
+from functools import lru_cache
+
+# Cache tool schemas
+@lru_cache(maxsize=100)
+async def get_tool_schema(mcp_name: str, tool_name: str):
+    return await mcp.call(f"{mcp_name}_search_tools", {
+        "query": tool_name,
+        "detail_level": "full"
+    })
+
+# Cache scraped content
+scraped_cache = {}
+
+async def scrape_with_cache(url: str):
+    if url in scraped_cache:
+        print(f"Cache hit for {url}")
+        return scraped_cache[url]
+
+    result = await mcp.call("webscrape_scrape_url", {"url": url})
+    scraped_cache[url] = result
+    return result
+```
+
+## Before/After Examples
+
+### Example 1: Web Scraping Pipeline
+
+**Before (Inefficient)**:
+```python
+# All data flows through context
+async def analyze_website(url: str):
+    # 50KB in context
+    page = await mcp.call("scrape", {"url": url})
+
+    # Extract links (50KB still in context)
+    links = await mcp.call("extract_links", {"html": page["content"]})
+
+    # Scrape each link (hundreds of KB in context)
+    link_contents = []
+    for link in links["links"][:5]:
+        content = await mcp.call("scrape", {"url": link})
+        link_contents.append(content)
+
+    # Analyze (all data in context)
+    return analyze(page, link_contents)  # Context explosion!
+```
+
+**After (Efficient)**:
+```python
+# Data stays in execution environment
+async def analyze_website(url: str):
+    # Get reference (small)
+    page_ref = await mcp.call("scrape", {"url": url})
+
+    # Fetch into execution env
+    page_content = await mcp.get_resource(page_ref["resource_uri"])
+
+    # Extract links locally (not through context)
+    links = extract_links_local(page_content)
+
+    # Scrape links in parallel
+    link_tasks = [
+        mcp.call("scrape", {"url": link})
+        for link in links[:5]
+    ]
+    link_refs = await asyncio.gather(*link_tasks)
+
+    # Fetch all into execution env
+    link_contents = [
+        await mcp.get_resource(ref["resource_uri"])
+        for ref in link_refs
+    ]
+
+    # Analyze locally (outside context)
+    return analyze_local(page_content, link_contents)
+```
+
+**Token Savings**: 250KB → 5KB (98% reduction)
+
+### Example 2: Data Transformation
+
+**Before (Inefficient)**:
+```python
+# Transform through context
+async def transform_data(input_file: str):
+    # Load 1MB into context
+    data = await mcp.call("load_file", {"path": input_file})
+
+    # Transform in context
+    transformed = await mcp.call("transform", {"data": data})
+
+    # Save through context
+    await mcp.call("save_file", {"data": transformed, "path": "output.json"})
+```
+
+**After (Efficient)**:
+```python
+# Transform in execution environment
+async def transform_data(input_file: str):
+    # Get file reference
+    file_ref = await mcp.call("load_file", {"path": input_file})
+
+    # Load into execution env
+    data = await mcp.get_resource(file_ref["resource_uri"])
+
+    # Transform locally
+    transformed = transform_local(data)
+
+    # Save directly (transformed data never in context)
+    await mcp.call("save_file", {
+        "data": transformed,
+        "path": "output.json"
+    })
+```
+
+**Token Savings**: 2MB → 2KB (99.9% reduction)
+
+## Testing Agent Code
+
+### Unit Test Pattern
+```python
+import pytest
+from unittest.mock import AsyncMock, Mock
+
+@pytest.mark.asyncio
+async def test_scrape_and_analyze():
+    # Mock MCP calls
+    mock_mcp = Mock()
+    mock_mcp.call = AsyncMock()
+    mock_mcp.get_resource = AsyncMock()
+
+    # Setup mock responses
+    mock_mcp.call.return_value = {
+        "resource_uri": "scrape://test123/content",
+        "preview": "Test content..."
+    }
+    mock_mcp.get_resource.return_value = "<html>Test</html>"
+
+    # Test function
+    result = await scrape_and_analyze("https://example.com")
+
+    # Assertions
+    assert mock_mcp.call.called
+    assert "resource_uri" in result
+```
+
+### Integration Test Pattern
+```python
+@pytest.mark.asyncio
+async def test_full_pipeline():
+    # Use real MCP (requires MCP server running)
+    result = await scrape_and_analyze("https://example.com")
+
+    # Verify structure
+    assert "resource_uri" in result
+    assert result["preview"]
+
+    # Verify data accessible
+    content = await mcp.get_resource(result["resource_uri"])
+    assert len(content) > 0
+```
+
+## Performance Optimization
+
+### Measure Token Usage
+```python
+def measure_tokens(func):
+    async def wrapper(*args, **kwargs):
+        start_tokens = get_context_size()
+
+        result = await func(*args, **kwargs)
+
+        end_tokens = get_context_size()
+        tokens_used = end_tokens - start_tokens
+
+        print(f"{func.__name__} used {tokens_used} tokens")
+        return result
+
+    return wrapper
+
+@measure_tokens
+async def my_pipeline(url: str):
+    # Implementation
+    pass
+```
+
+### Optimize Tool Discovery
+```python
+# ❌ Slow - Loads all schemas
+all_tools = await mcp.call("list_tools", {"detail_level": "full"})
+
+# ✅ Fast - Loads names only
+tool_names = await mcp.call("list_tools", {"detail_level": "minimal"})
+# Then load specific schemas as needed
+schema = await mcp.call("search_tools", {
+    "query": "specific_tool",
+    "detail_level": "full"
+})
+```
+
+### Batch Operations
+```python
+# ❌ Slow - Sequential
+results = []
+for url in urls:
+    result = await mcp.call("scrape", {"url": url})
+    results.append(result)
+
+# ✅ Fast - Parallel
+results = await asyncio.gather(*[
+    mcp.call("scrape", {"url": url})
+    for url in urls
+])
+```
+
+## Common Pitfalls
+
+### ❌ Loading Full Data Into Context
+```python
+# BAD
+data = await mcp.call("get_data", {"id": 123})
+process(data["content"])  # Large content in context
+```
+
+### ✅ Using Resources
+```python
+# GOOD
+ref = await mcp.call("get_data", {"id": 123})
+content = await mcp.get_resource(ref["resource_uri"])
+process(content)  # In execution env
+```
+
+### ❌ No Error Handling
+```python
+# BAD
+result = await mcp.call("tool", params)
+# What if it fails?
+```
+
+### ✅ Graceful Errors
+```python
+# GOOD
+try:
+    result = await mcp.call("tool", params)
+    if "error" in result:
+        handle_error(result["error"])
+except Exception as e:
+    fallback_behavior()
+```
+
+### ❌ Not Leveraging Discovery
+```python
+# BAD - Assumes tool exists
+await mcp.call("unknown_tool", params)  # May fail
+```
+
+### ✅ Discovery First
+```python
+# GOOD
+tools = await mcp.call("list_tools", {"detail_level": "minimal"})
+if "target_tool" in tools:
+    await mcp.call("target_tool", params)
+else:
+    use_alternative_approach()
+```
+
+## References
+
+See detailed guides in `references/`:
+- `data-management.md` - Managing data outside context
+- `pii-handling.md` - PII tokenization patterns
+- `error-handling.md` - Resilient code patterns
+- `performance-optimization.md` - Speed and efficiency
+- `testing-agent-code.md` - Testing strategies
+
+## Examples
+
+See working examples in `examples/`:
+- `scraping-pipeline.py` - Complete web scraping workflow
+- `data-transformation.py` - Large data processing
+- `pii-tokenization.py` - Sensitive data handling
+- `parallel-operations.py` - Concurrent execution
