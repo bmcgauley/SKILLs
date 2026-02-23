@@ -191,7 +191,45 @@ If not, note which field to reposition before cropping.
 
 ---
 
-### DELIVERABLE 5 — Cross-Platform Descriptions
+### DELIVERABLE 5 — SEO Keywords
+
+Generate a keyword set for the episode and apply the correct optimized mix to every platform that supports keywords, tags, or hashtags. Produce the keyword set first, then embed the platform-specific optimized selections directly inside each platform's copy block in Deliverable 6.
+
+**Keyword Set Structure:**
+
+```
+PRIMARY KEYWORDS (broad, high-volume — 8–12 terms):
+[comma-separated list]
+
+SECONDARY KEYWORDS (entity/topic-specific — 15–25 terms):
+[comma-separated list — show name, guest names, company names, model names, key topics]
+
+LONG-TAIL KEYWORDS (specific phrases, lower competition — 15–25 phrases):
+[comma-separated list — conversational queries, specific claims, niche audience hooks]
+```
+
+**Platform Keyword Limits & Format Rules:**
+
+| Platform | Format | Limit | Mix Strategy |
+|---|---|---|---|
+| YouTube Tags | comma-separated, no # | 500 characters total | 5–6 primary + 8–10 secondary + 4–5 long-tail |
+| YouTube Description | natural language inline | No tag limit in body | Weave 3–4 primary naturally into first 200 chars |
+| Instagram | hashtags (#) | 30 tags max | 4–5 primary + 8–10 secondary + 4–6 long-tail |
+| LinkedIn | hashtags (#) | 5–8 recommended | 3 primary + 2–3 secondary only — quality over quantity |
+| RSS.com | comma-separated or tags field | varies by platform | 5 primary + 5 secondary — highest clarity terms only |
+| Blog/Substack | inline natural language + meta keywords | meta: 10–15 phrases | Mix all tiers naturally; front-load primary in title/H2s |
+
+**Application rules:**
+- Embed the optimized keyword/hashtag block directly at the bottom of each platform's copy in Deliverable 6 — do not list keywords separately from the copy that uses them
+- For blog posts: include a meta keywords line at the end of the post (comma-separated, no #), and ensure primary keywords appear naturally in the title, at least two H2 headers, and the opening paragraph
+- YouTube tags go in a dedicated TAGS field below the description, not embedded in description body
+- Never repeat the same hashtag twice on a single platform
+- Instagram: place hashtag block after the CTA line, separated by a line break
+- LinkedIn: place 3–5 hashtags at the very end of the post, on their own line
+
+---
+
+### DELIVERABLE 6 — Cross-Platform Descriptions
 
 Produce one block per platform, clearly labeled:
 
@@ -220,7 +258,7 @@ Description: [3–4 sentence summary. Hook sentence. Content overview. Source/cr
 
 ---
 
-### DELIVERABLE 6 — Buffer Queue (7-Day Posting Schedule)
+### DELIVERABLE 7 — Buffer Queue (7-Day Posting Schedule)
 
 **Default schedule** (override with show-config.md settings if specified):
 - Episode airs: Sunday
@@ -246,7 +284,7 @@ Adjust platform mix per show-config.md. Default platforms: YouTube, Instagram, L
 
 ---
 
-### DELIVERABLE 7 — Infographic Description
+### DELIVERABLE 8 — Infographic Description
 
 ```
 FORMAT RECOMMENDATION: [Landscape 16:9 for LinkedIn/Twitter/YouTube community post; 
@@ -291,7 +329,9 @@ Apply these checks before delivering any output:
 - Each section earns its word count — no padding
 
 **Completeness:**
-- All 7 deliverables present
+- All 8 deliverables present
+- Keyword set generated and embedded in every platform block that supports tags/hashtags
+- Platform-specific keyword limits respected (YouTube 500 chars, Instagram 30 tags, LinkedIn 5–8 tags)
 - All `[SLIDE IMAGE]` placeholders in blog post
 - All CTA links populated from show-config.md
 - Thumbnail A and B are visually and textually distinct from each other
